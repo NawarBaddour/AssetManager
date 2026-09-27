@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AssetManager</title>
+<!-- Inline so there is no extra request and no 404 for /favicon.ico. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23131318'/%3E%3Cpath d='M7 23 16 8l9 15h-4.6l-1.7-3h-5.4l-1.7 3z' fill='%23c6392f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">Asset<span>Manager</span></div>
+
+  <div class="search">
+    <svg viewBox="0 0 16 16" class="ico"><circle cx="7" cy="7" r="4.4"/><line x1="10.2" y1="10.2" x2="14" y2="14"/></svg>
+    <input id="search" type="search" placeholder="Search name, path, note or tag..." autocomplete="off">
+  </div>
+
+  <label class="sel"><span>Type</span>
+    <select id="category">
+      <option value="ALL">All types</option>
+      <option value="IMAGE">Images</option>
+      <option value="AUDIO">Audio</option>
+      <option value="MODEL">3D Models</option>
+    </select>
+  </label>
+
+  <label class="sel"><span>Sort</span>
+    <select id="sort">
+      <option value="NAME">Name</option>
+      <option value="DATE">Date added</option>
+      <option value="MODIFIED">Date modified</option>
+      <option value="SIZE">Size</option>
+      <option value="DIMENSION">Resolution</option>
+      <option value="DURATION">Duration</option>
+      <option value="TRIANGLES">Triangles</option>
+    </select>
+  </label>
+
+  <label class="sel narrow"><span>Min px</span>
+    <input id="mindim" type="number" min="0" step="64" value="0">
+  </label>
+
+  <div class="toggles">
+    <label><input type="checkbox" id="untagged"><span>Untagged</span></label>
+    <label><input type="checkbox" id="duplicates"><span>Duplicates</span></label>
+    <label><input type="checkbox" id="problems"><span>Problems</span></label>
+  </div>
+
+  <label class="sel"><span>Size</span>
+    <input id="cellsize" type="range" min="88" max="260" value="140">
+  </label>
+
+  <button id="rescan" class="btn primary">Rescan</button>
+  <button id="addfolder" class="btn">Add folder</button>
+  <button id="dupes" class="btn">Duplicates</button>
+  <button id="clearcache" class="btn">Clear cache</button>
+</header>
+
+<main class="layout">
+  <aside class="side">
+    <div class="sidehead">Library</div>
+    <div class="sidegroup">
+      <h3>Tags</h3>
+      <div id="taglist" class="chips"><p class="muted">no tags yet</p></div>
+    </div>
+    <div class="sidegroup">
+      <h3>Folders</h3>
+      <div id="rootlist" class="roots"><p class="muted">none indexed</p></div>
+    </div>
+    <div class="sidegroup">
+      <h3>Totals</h3>
+      <div id="stats" class="stats"></div>
+    </div>
+  </aside>
+
+  <section class="gridwrap">
+    <div id="statusbar" class="statusbar"></div>
+
+    <div id="selbar" class="selbar hidden">
+      <span id="selcount" class="selcount">0 selected</span>
+      <button id="seltag" class="btn small">Tag&hellip;</button>
+      <button id="seluntag" class="btn small">Remove tag&hellip;</button>
+      <button id="selcopy" class="btn small">Copy to&hellip;</button>
+      <button id="selforget" class="btn small">Forget</button>
+      <button id="seltools" class="btn small">Workbench&hellip;</button>
+      <button id="selselectall" class="btn small">Select all</button>
+      <button id="selnone" class="btn small">Clear</button>
+    </div>
+
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty hidden">No assets match the current filters.</div>
+  </section>
+
+  <aside class="detail">
+    <div class="dhead">
+      <div id="dtitle" class="dtitle">No asset selected</div>
+      <div class="dlinks">
+        <a id="dopen" class="dl hidden" target="_blank" rel="noopener">open</a>
+        <a id="ddl" class="dl hidden">download</a>
+      </div>
+    </div>
+
+    <div id="preview" class="preview">
+      <p class="muted center">Select an asset to preview it</p>
+    </div>
+
+    <div class="dmeta" id="dmeta"></div>
+
+    <div class="drow">
+      <h4>Tags</h4>
+      <div id="dchips" class="chips"></div>
+      <div class="addrow">
+        <input id="taginput" type="text" placeholder="Add a tag and press Enter">
+        <button id="tagadd" class="btn small">Add</button>
+      </div>
+    </div>
+
+    <div class="drow">
+      <h4>Note</h4>
+      <input id="note" type="text" placeholder="Free-form note">
+    </div>
+  </aside>
+</main>
+
+<!-- Texture workbench: select one or more images, then Workbench in the toolbar. -->
+<div id="sheet" class="sheet hidden" role="dialog" aria-label="Texture workbench">
+  <div class="sheethead">
+    <div class="brand">Texture <span>workbench</span></div>
+    <div id="wbinfo" class="muted"></div>
+    <button id="wbclose" class="btn small">Close</button>
+  </div>
+
+  <div class="wbpanes">
+    <figure class="wbpane">
+      <figcaption>source</figcaption>
+      <div class="wbimg" id="wbsrc"></div>
+    </figure>
+    <figure class="wbpane">
+      <figcaption>result</figcaption>
+      <div class="wbimg" id="wbres"></div>
+    </figure>
+  </div>
+
+  <div id="wbatlasinfo" class="wbatlasinfo hidden">
+    <div class="wbatlashead">
+      <span id="wbatlassum" class="muted"></span>
+      <span class="spacer"></span>
+      <button id="wbatlascopy" class="btn small">Copy UV map</button>
+      <button id="wbatlashide" class="btn small">Hide</button>
+    </div>
+    <div class="wbatlastablewrap">
+      <table class="wbatlastable">
+        <thead><tr><th>Tile</th><th>x</th><th>y</th><th>w</th><th>h</th>
+          <th>u0</th><th>v0</th><th>u1</th><th>v1</th></tr></thead>
+        <tbody id="wbatlastable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="wbctl">
+    <fieldset>
+      <legend>Transform</legend>
+      <div class="wbrow">
+        <label>W<input id="wbw" type="number" min="1" max="16384" value="0"></label>
+        <label>H<input id="wbh" type="number" min="1" max="16384" value="0"></label>
+        <button class="btn small" data-op="resize">Resize</button>
+        <button class="btn small" data-op="pot">Power of two</button>
+        <label class="inline"><input id="wbup" type="checkbox">allow upscale</label>
+      </div>
+      <div class="wbrow">
+        <button class="btn small" data-op="rot90">Rotate 90&deg;</button>
+        <button class="btn small" data-op="rot270">Rotate 270&deg;</button>
+        <button class="btn small" data-op="fliph">Flip H</button>
+        <button class="btn small" data-op="flipv">Flip V</button>
+        <button class="btn small" data-op="crop50">Crop centre 50%</button>
+      </div>
+      <div class="wbrow">
+        <span class="muted">Crop</span>
+        <label>X<input id="wbcx" type="number" min="0" value="0"></label>
+        <label>Y<input id="wbcy" type="number" min="0" value="0"></label>
+        <label>W<input id="wbcw" type="number" min="1" value="0"></label>
+        <label>H<input id="wbch" type="number" min="1" value="0"></label>
+        <button class="btn small" data-op="crop">Crop</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Channels</legend>
+      <div class="wbrow" id="wbpack">
+        <label>R<select class="chan" data-k="r"></select></label>
+        <label>G<select class="chan" data-k="g"></select></label>
+        <label>B<select class="chan" data-k="b"></select></label>
+        <label>A<select class="chan" data-k="a"></select></label>
+        <button class="btn small" data-op="pack">Pack &rarr; RGB</button>
+      </div>
+      <div class="wbrow">
+        <button class="btn small" data-act="split">Split R/G/B to files</button>
+        <span class="muted">writes three greyscale PNGs beside the source</span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Normal map</legend>
+      <div class="wbrow">
+        <label>Strength<input id="wbnorm" type="range" min="0" max="400" value="100"></label>
+        <span id="wbnormv" class="muted">1.00</span>
+        <button class="btn small" data-op="normal">Height &rarr; Normal</button>
+      </div>
+      <div class="wbrow">
+        <label>Opacity<input id="wbop" type="range" min="0" max="100" value="100"></label>
+        <span id="wbopv" class="muted">1.00</span>
+        <button class="btn small" data-op="opacity">Apply alpha</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Atlas</legend>
+      <div class="wbrow">
+        <label>Padding<input id="wbpad" type="number" min="0" max="64" value="2"></label>
+        <button class="btn small" data-act="atlas">Pack selection into an atlas</button>
+        <span class="muted" id="wbatlascount"></span>
+      </div>
+    </fieldset>  </div>
+
+  <div class="wbfoot">
+    <span id="wbstatus" class="muted">Select an image asset to edit.</span>
+    <div class="wbsave">
+      <label>Format<select id="wbfmt"></select></label>
+      <button id="wbsaveas" class="btn small">Save as&hellip;</button>
+      <button id="wboverwrite" class="btn small">Overwrite source</button>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate report. -->
+<div id="dupesheet" class="sheet hidden" role="dialog" aria-label="Duplicate files">
+  <div class="sheethead">
+    <div class="brand">Duplicate <span>files</span></div>
+    <div id="dupesum" class="muted"></div>
+    <button id="dupeclose" class="btn small">Close</button>
+  </div>
+  <div class="dupebody" id="dupebody"></div>
+  <div class="wbfoot">
+    <span class="muted">Files are grouped by SHA-256 content hash. Reclaimable space counts every copy after the first.</span>
+    <button id="dupeshow" class="btn small">Show duplicates in the grid</button>
+  </div>
+</div>
+
+<!-- Fallback for browsers without the File System Access API, and for
+     "add folder", which needs an absolute path the platform will not hand us
+     through any native dialog. -->
+<div id="pathdlg" class="modalsheet hidden" role="dialog" aria-modal="true" aria-labelledby="pathdlgtitle">
+  <form class="modal" id="pathform" autocomplete="off">
+    <h3 id="pathdlgtitle">Choose a path</h3>
+    <p class="muted" id="pathdlghint"></p>
+    <input id="pathdlginput" type="text" spellcheck="false" autocomplete="off">
+    <div id="pathdlgsuggest" class="suggest"></div>
+    <div class="modalrow">
+      <span id="pathdlgcheck" class="muted"></span>
+      <span class="spacer"></span>
+      <button type="button" id="pathdlgcancel" class="btn">Cancel</button>
+      <button type="submit" id="pathdlgok" class="btn primary">OK</button>
+    </div>
+  </form>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
